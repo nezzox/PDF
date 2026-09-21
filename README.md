@@ -16,3 +16,15 @@ Dokument hanteras lokalt i webbläsaren och skickas inte till GitHub eller Drive
 
 ## Lokal användning
 Ladda ner repot och öppna index.html. Behåll style.css och app.js i samma mapp. Inga externa beroenden.
+
+
+## Utökad editor
+- Textstilar: brödtext, titel och undertitel. Fetstil, storlek, radavstånd samt vänster-, höger-, center- och marginaljustering gäller hela textrutan.
+- Automatisk svensk avstavning kan slås på per ruta. Språkstödet varierar mellan webbläsare och operativsystem.
+- Nio layouter, inklusive tre kolumner, tre rader, 3 × 2 samt tre små rutor bredvid en stor (båda riktningarna).
+- Dra de blå gränserna mellan rutorna för att fördela bredd och höjd. Dra greppet under blocket för totalhöjd. Tangentbord: fokusera gränsen med Tab och använd piltangenterna; Shift ger större steg.
+- Bilder: fyll/beskär, visa hela eller sträck. Zoom 100–300 %, vågrätt/lodrätt läge och återställning.
+- Projektformat version 2 sparar alla inställningar och öppnar även äldre version 1-filer.
+
+## Kontrollera dokumentmodellen
+Kör `node --test model.test.cjs` för migration, sidgränser, rutproportioner och validering av projektfiler.
