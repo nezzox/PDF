@@ -33,6 +33,9 @@ Kör `node --test model.test.cjs` för migration, sidgränser, rutproportioner o
 - Gemensamt sidhuvud och sidfot med separata av/på-reglage, text samt PNG-, JPEG- eller WebP-logotyp. Bildens bredd och vänster-/högerplacering kan justeras. Bildernas proportioner bevaras.
 - Avstängda sidband behåller sina inställningar men exporteras inte. Frigjort utrymme kan användas av innehållet. Aktivering som skulle orsaka överlappning stoppas med ett meddelande.
 - Varje block har separata vågräta och lodräta mellanrum (0–20 mm). Avståndet mellan block styrs gemensamt.
-- Blockhöjd ned till 0,1 mm; rutproportionerna kan dras under den tidigare gränsen på 8 %. Vid mycket liten totalhöjd minskas mellanrummet automatiskt så att rutorna får plats. Innehåll som inte ryms behöver anpassas före PDF-export.
+- Blockhöjd ned till 0,1 mm; rutproportionerna kan dras under den tidigare gränsen på 8 %. Vid mycket liten totalhöjd minskas mellanrummet automatiskt så att rutorna får plats. Innehåll som inte ryms markeras. PDF-export kan ändå fortsätta efter en varning; kontrollera utskriftsförhandsgranskningen så att ingen text klipps.
 - Totalt 15 layouter. Sex nya: fyra kolumner, stor ruta överst, stor ruta nederst, sidokolumn vänster, sidokolumn höger och stor mittruta.
 - Nya projektfiler använder version 3. Version 1 och 2 kan fortfarande öppnas.
+
+## Utskriftskontroll
+Tomma textrutor och deras redigeringsplatshållare räknas inte som textöverspill. Små avrundningsskillnader på upp till tre CSS-pixlar tolereras. Vid större överspill visas en varning med val att fortsätta till utskriftsdialogen eller återgå till editorn. Texten skalas inte om automatiskt. Kör `node --test print.test.cjs` för utskriftsregressionerna.

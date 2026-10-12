@@ -85,7 +85,29 @@ function properties(){
   if(c.type!=='empty')root.append(btn('Töm vald ruta',()=>{if(!confirm('Töm rutans innehåll?'))return;b.cells[selected.c]=M.cell();changed();render()},'wide clearcell'));
   root.append(btn('Ta bort layoutblock',()=>{if(!confirm('Ta bort layoutblocket?'))return;p.blocks=p.blocks.filter(x=>x!==b);selected=null;changed();render()},'danger'));
 }
-function checkOverflow(){let bad=false;document.querySelectorAll('.textcontent').forEach(t=>{const over=t.scrollHeight>t.clientHeight+2||t.scrollWidth>t.clientWidth+2;t.parentElement.classList.toggle('overflow',over);t.setAttribute('aria-invalid',String(over));bad ||=over});document.querySelectorAll('.page-band').forEach(f=>{const text=f.querySelector('.band-text');const over=text.scrollHeight>text.clientHeight+2||text.scrollWidth>text.clientWidth+2;f.classList.toggle('overflow',over);bad ||=over});return bad}
+// Screen font metrics and fractional CSS pixels differ across devices.
+// This is an editor hint, never a reason to make printing unavailable.
+function hasTextOverflow(element){
+  if(!element || !element.textContent.trim())return false;
+  const tolerance=3;
+  return element.scrollHeight-element.clientHeight>tolerance ||
+    element.scrollWidth-element.clientWidth>tolerance;
+}
+function checkOverflow(){
+  let bad=false;
+  document.querySelectorAll('.textcontent').forEach(text=>{
+    const over=hasTextOverflow(text);
+    text.parentElement.classList.toggle('overflow',over);
+    text.setAttribute('aria-invalid',String(over));
+    bad ||=over;
+  });
+  document.querySelectorAll('.page-band').forEach(band=>{
+    const over=hasTextOverflow(band.querySelector('.band-text'));
+    band.classList.toggle('overflow',over);
+    bad ||=over;
+  });
+  return bad;
+}
 function renderBand(name,index){
   const cfg=doc[name],band=make('div','page-band page-'+name+(cfg.logoPosition==='right'?' logo-right':''));
   if(cfg.logo){const image=make('img','band-logo');image.src=cfg.logo;image.alt=name==='header'?'Logotyp i sidhuvud':'Logotyp i sidfot';image.style.width=cfg.logoWidth+'mm';band.append(image)}
@@ -108,6 +130,13 @@ $('#title').oninput=e=>{doc.title=e.target.value;document.title=doc.title||'PDF 
 $('#imageInput').onchange=async e=>{const file=e.target.files[0],target=imageTarget;e.target.value='';if(!file||!target)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024){notify('Välj en PNG-, JPEG- eller WebP-bild, högst 20 MB.');return}try{const bitmap=await createImageBitmap(file);const ratio=Math.min(1,2400/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*ratio);canvas.height=Math.round(bitmap.height*ratio);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const c=doc.pages.find(p=>p.id===target.p)?.blocks.find(b=>b.id===target.b)?.cells[target.c];if(!c)return;Object.assign(c,{type:'image',src:canvas.toDataURL('image/png'),zoom:1,posX:50,posY:50});selected=target;active=target.p;changed();render()}catch{notify('Bilden kunde inte öppnas. Prova en annan fil.')}};
 $('#save').onclick=()=>{const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=make('a');a.href=url;a.download=(doc.title||'dokument').replace(/[<>:"/\\|?*]/g,'_')+'.pdfmaker.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);dirty=false;notify('Projektfilen har laddats ner.')};$('#load').onclick=()=>$('#projectInput').click();
 $('#projectInput').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(dirty&&!confirm('Öppna projektet och ersätta ditt osparade arbete?'))return;try{if(f.size>100*1024*1024)throw Error();doc=M.validate(JSON.parse(await f.text()));active=doc.pages[0].id;selected=null;$('#title').value=doc.title;$('#numbers').checked=doc.numbers;document.title=doc.title||'PDF Maker';dirty=false;render();notify('Projektet är öppnat.')}catch{notify('Filen är inte ett giltigt PDF Maker-projekt.')}};
-$('#export').onclick=()=>{document.activeElement?.blur();if(checkOverflow()){notify('Texten ryms inte. Öka rutans storlek, minska textstorleken eller korta sidhuvudet/sidfoten innan export.');return}document.title=doc.title||'Mitt dokument';window.print()};window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+$('#export').onclick=()=>{
+  document.activeElement?.blur();
+  if(checkOverflow() && !window.confirm(
+    'En eller flera textrutor kan vara för små för texten. Mätningen kan skilja mellan datorer och webbläsare.\n\nÖppna utskriftsdialogen ändå? Kontrollera förhandsgranskningen – text utanför rutorna kan klippas.\n\nOK = fortsätt till utskrift. Avbryt = återgå och justera.'
+  ))return;
+  document.title=doc.title||'Mitt dokument';
+  window.print();
+};window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 render();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();for(const tool of [{name:'read_document_structure',description:'Read page and layout counts in the current PDF document.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({pages:doc.pages.map((p,i)=>({page:i+1,layouts:p.blocks.map(b=>b.type)}))})},{name:'add_document_page',description:'Append a blank A4 page to the current document.',inputSchema:{type:'object',properties:{},additionalProperties:false},execute:input=>{if(!input||typeof input!=='object'||Object.keys(input).length)throw Error('Expected empty object');const id=addPage();if(!id)throw Error('Page limit reached');return {pages:doc.pages.length}}}]){try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{})}catch{}}window.addEventListener('pagehide',()=>lifecycle.abort())}
