@@ -1,6 +1,6 @@
 'use strict';
 const M=window.PDFModel,$=s=>document.querySelector(s);
-let doc={version:3,title:'Mitt dokument',header:M.band(false),footer:M.band(true),blockGap:5,numbers:true,pages:[{id:M.uid(),blocks:[]}]};
+let doc={version:4,title:'Mitt dokument',header:M.band(false),footer:M.band(true),blockGap:5,numbers:true,pages:[{id:M.uid(),blocks:[]}]};
 let active=doc.pages[0].id,selected=null,dirty=false,imageTarget=null,logoTarget=null;
 function make(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
 function btn(text,fn,cls){const e=make('button',cls,text);e.type='button';e.onclick=e=>{e.stopPropagation();fn(e)};return e}
@@ -8,15 +8,112 @@ function notify(text){$('#toast').textContent=text;$('#toast').style.display='bl
 function changed(){dirty=true}
 function selection(){const p=doc.pages.find(p=>p.id===selected?.p),b=p?.blocks.find(b=>b.id===selected.b);return {p,b,c:b?.cells[selected.c]}}
 function syncActive(){document.querySelectorAll('.pagewrap').forEach(w=>w.querySelector('.paper').classList.toggle('active',w.id===active));document.querySelectorAll('#pageNav button').forEach((e,i)=>e.classList.toggle('active',doc.pages[i].id===active))}
-function select(p,b,i){active=p.id;selected={p:p.id,b:b.id,c:i};syncActive();document.querySelectorAll('.cell').forEach(e=>e.classList.toggle('selected',e.dataset.block===b.id&&Number(e.dataset.cell)===i));properties()}
+function select(p,b,i){const same=selected?.p===p.id&&selected?.b===b.id&&selected?.c===i;if(!same)textSelection=null;active=p.id;selected={p:p.id,b:b.id,c:i};syncActive();document.querySelectorAll('.cell').forEach(e=>e.classList.toggle('selected',e.dataset.block===b.id&&Number(e.dataset.cell)===i));if(!same)properties()}
 function addPage(){if(doc.pages.length>=100){notify('Ett projekt kan innehålla högst 100 sidor.');return}const p={id:M.uid(),blocks:[]};doc.pages.push(p);active=p.id;selected=null;changed();render();document.getElementById(p.id).scrollIntoView({behavior:'smooth',block:'start'});return p.id}
 function addLayout(type,pid=active){const p=doc.pages.find(p=>p.id===pid);if(!p||!M.layouts[type])throw Error('Ogiltig layout eller sida');const available=M.contentHeight(doc)-M.usedHeight(p,doc)-(p.blocks.length?doc.blockGap:0),b=M.createBlock(type,available);if(!b){notify('Sidan är full. Lägg till en ny sida.');return false}p.blocks.push(b);active=p.id;selected={p:p.id,b:b.id,c:0};changed();render();return true}
 Object.entries(M.layouts).forEach(([type,l])=>{const e=btn('',()=>addLayout(type),'template');e.draggable=true;e.setAttribute('aria-label',l.label);e.ondragstart=ev=>{ev.dataTransfer.setData('text/plain',type);ev.dataTransfer.effectAllowed='copy'};const mini=make('span','mini');mini.style.gridTemplateColumns=`repeat(${l.cols},1fr)`;mini.style.gridTemplateRows=`repeat(${l.rows},1fr)`;l.cells.forEach(([x,y,w,h])=>{const box=make('i');box.style.gridColumn=`${x+1} / span ${w}`;box.style.gridRow=`${y+1} / span ${h}`;mini.append(box)});e.append(mini,make('span','',l.label));$('#templates').append(e)});
-function styleText(t,c){t.style.fontSize=c.size+'pt';t.style.fontWeight=c.bold?'700':'400';t.style.textAlign=c.align;t.style.hyphens=c.hyphens?'auto':'manual';t.style.webkitHyphens=c.hyphens?'auto':'manual';t.style.lineHeight=c.lineHeight;t.dataset.textStyle=c.textStyle}
+function styleText(t,c){t.style.color=c.color;t.style.fontSize=c.size+'pt';t.style.fontWeight=c.bold?'700':'400';t.style.textAlign=c.align;t.style.hyphens=c.hyphens?'auto':'manual';t.style.webkitHyphens=c.hyphens?'auto':'manual';t.style.lineHeight=c.lineHeight;t.dataset.textStyle=c.textStyle}
 function styleImage(img,c){img.style.objectFit=c.fit;img.style.objectPosition=`${c.posX}% ${c.posY}%`;img.style.transform=`scale(${c.zoom})`;img.style.transformOrigin=`${c.posX}% ${c.posY}%`}
-function updateCell(){const {b,c}=selection();if(!b)return;const e=document.querySelector(`.cell[data-block="${b.id}"][data-cell="${selected.c}"]`);if(c.type==='text')styleText(e.querySelector('.textcontent'),c);if(c.type==='image')styleImage(e.querySelector('img'),c);changed();checkOverflow()}
+function updateCell(){const {b,c}=selection();if(!b)return;const e=document.querySelector(`.cell[data-block="${b.id}"][data-cell="${selected.c}"]`);styleCell(e,c);if(c.type==='text')styleText(e.querySelector('.textcontent'),c);if(c.type==='image')styleImage(e.querySelector('img'),c);changed();checkOverflow()}
+
+// Keep the browser selection while the user operates controls in the inspector.
+let textSelection=null;
+function selectedEditor(){
+ const {b,c}=selection();
+ return b&&c?.type==='text'?document.querySelector('.cell[data-block="'+b.id+'"][data-cell="'+selected.c+'"] .textcontent'):null;
+}
+function rememberTextSelection(){
+ const t=selectedEditor(),s=window.getSelection();
+ if(t&&s.rangeCount&&t.contains(s.anchorNode)&&t.contains(s.focusNode)){
+  textSelection={editor:t,range:s.getRangeAt(0).cloneRange()};
+  if(document.activeElement===t)syncTextControls();
+ }
+}
+document.addEventListener('selectionchange',rememberTextSelection);
+function syncTextControls(){
+ const {c}=selection();if(!c)return;const f=currentTextFormat(c);
+ for(const key of ['size','color','lineHeight']){
+  const input=document.querySelector('[data-format="'+key+'"]');if(input)input.value=f[key];
+ }
+ const bold=document.querySelector('[data-format="bold"]');if(bold){bold.classList.toggle('primary',f.bold);bold.setAttribute('aria-pressed',String(f.bold))}
+}
+function currentTextFormat(c){
+ const saved=textSelection,t=selectedEditor();
+ let node=saved?.editor===t?saved.range.startContainer:t;
+ if(node?.nodeType===3)node=node.parentElement;
+ const style=node&&getComputedStyle(node);
+ return style?{size:Math.round(parseFloat(style.fontSize)*.75*100)/100,bold:Number(style.fontWeight)>=600,color:cssColor(style.color,c.color),lineHeight:M.clamp(parseFloat(style.lineHeight)/parseFloat(style.fontSize)||c.lineHeight,1,2)}:c;
+}
+function cssColor(value,fallback='#202638'){
+ if(/^#[0-9a-f]{6}$/i.test(value))return value;
+ const rgb=value.match(/^rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+ return rgb?'#'+rgb.slice(1,4).map(v=>Number(v).toString(16).padStart(2,'0')).join(''):fallback;
+}
+function readRichText(t,c){
+ const runs=[];
+ function push(text,style){
+  if(!text)return;
+  const r={text,size:M.clamp(parseFloat(style.fontSize)*.75,8,64),bold:Number(style.fontWeight)>=600,color:cssColor(style.color,c.color),lineHeight:M.clamp(parseFloat(style.lineHeight)/parseFloat(style.fontSize)||c.lineHeight,1,2)};
+  const prev=runs.at(-1);
+  if(prev&&prev.size===r.size&&prev.bold===r.bold&&prev.color===r.color&&prev.lineHeight===r.lineHeight)prev.text+=text;else runs.push(r);
+ }
+ function walk(parent){
+  for(const node of parent.childNodes){
+   if(node.nodeType===3){push(node.data,getComputedStyle(node.parentElement));continue}
+   if(node.nodeType!==1)continue;
+   const style=getComputedStyle(node);
+   if(node.tagName==='BR'){if(parent.childNodes.length!==1)push('\n',style);continue}
+   const block=['DIV','P','LI'].includes(node.tagName);
+   if(block&&node.previousSibling)push('\n',style);
+   walk(node);
+   if(block&&node.nextSibling&&!['DIV','P','LI'].includes(node.nextSibling.nodeName))push('\n',style);
+  }
+ }
+ walk(t);return runs;
+}
+function saveRichText(t,c){c.runs=readRichText(t,c);c.text=c.runs.map(r=>r.text).join('');changed();checkOverflow()}
+function renderRichText(t,c){
+ t.replaceChildren();
+ if(!c.runs.length){t.textContent=c.text;return}
+ for(const run of c.runs){
+  const span=make('span','',run.text);
+  Object.assign(span.style,{fontSize:run.size+'pt',fontWeight:run.bold?'700':'400',color:run.color,lineHeight:String(run.lineHeight)});
+  t.append(span);
+ }
+}
+function formatSelection(values){
+ const {c}=selection(),t=selectedEditor(),saved=textSelection;
+ if(!t)return;
+ if(!c.text.trim()&&(!saved||saved.range.collapsed)){
+  Object.assign(c,values);updateCell();return;
+ }
+ if(!saved||saved.editor!==t||!saved.range.startContainer.isConnected||saved.range.collapsed){
+  notify('Markera texten i rutan som du vill formatera.');return;
+ }
+ const range=saved.range.cloneRange();
+ t.focus({preventScroll:true});
+ const s=window.getSelection();s.removeAllRanges();s.addRange(range);
+ const fragment=range.extractContents();
+ const css={};
+ if(values.size!==undefined)css.fontSize=values.size+'pt';
+ if(values.bold!==undefined)css.fontWeight=values.bold?'700':'400';
+ if(values.color!==undefined)css.color=values.color;
+ if(values.lineHeight!==undefined)css.lineHeight=String(values.lineHeight);
+ // Overrides must also reach any previously formatted spans in this selection.
+ fragment.querySelectorAll('*').forEach(el=>Object.assign(el.style,css));
+ const span=make('span');Object.assign(span.style,css);span.append(fragment);range.insertNode(span);
+ range.selectNodeContents(span);s.removeAllRanges();s.addRange(range);
+ textSelection={editor:t,range:range.cloneRange()};saveRichText(t,c);
+}
+function styleCell(e,c){
+ const p=c.padding;
+ e.style.padding=[p.top,p.right,p.bottom,p.left].map(v=>v+'mm').join(' ');
+ e.dataset.verticalAlign=c.verticalAlign;
+}
+
 function plainPaste(e){e.preventDefault();const text=e.clipboardData.getData('text/plain'),sel=window.getSelection();if(!sel.rangeCount)return;const range=sel.getRangeAt(0);if(!e.currentTarget.contains(range.commonAncestorContainer))return;range.deleteContents();const node=document.createTextNode(text);range.insertNode(node);range.setStartAfter(node);range.collapse(true);sel.removeAllRanges();sel.addRange(range);e.currentTarget.dispatchEvent(new Event('input',{bubbles:true}))}
 function render(){
+  textSelection=null;
   $('#pages').replaceChildren();$('#pageNav').replaceChildren();
   doc.pages.forEach((p,index)=>{
     const nav=btn(String(index+1),()=>{active=p.id;syncActive();document.getElementById(p.id).scrollIntoView({behavior:'smooth',block:'start'})},p.id===active?'active':'');nav.setAttribute('aria-label',`Välj sida ${index+1}`);$('#pageNav').append(nav);
@@ -26,9 +123,9 @@ function render(){
     p.blocks.forEach(b=>{
       const block=make('div','block');block.dataset.id=b.id;const l=M.layouts[b.type];
       b.cells.forEach((c,i)=>{
-        const e=make('div','cell');e.dataset.block=b.id;e.dataset.cell=i;const [x,y,w,h]=l.cells[i];e.style.gridColumn=`${x+1} / span ${w}`;e.style.gridRow=`${y+1} / span ${h}`;if(selected?.b===b.id&&selected.c===i)e.classList.add('selected');e.onclick=ev=>{ev.stopPropagation();select(p,b,i)};
+        const e=make('div','cell');e.dataset.block=b.id;e.dataset.cell=i;styleCell(e,c);const [x,y,w,h]=l.cells[i];e.style.gridColumn=`${x+1} / span ${w}`;e.style.gridRow=`${y+1} / span ${h}`;if(selected?.b===b.id&&selected.c===i)e.classList.add('selected');e.onclick=ev=>{ev.stopPropagation();select(p,b,i)};
         if(c.type==='empty'){const choose=make('div','cellchooser');choose.append(btn('T  Text',()=>{c.type='text';selected={p:p.id,b:b.id,c:i};active=p.id;changed();render();document.querySelector('.cell.selected .textcontent').focus()}),btn('▧  Bild',()=>{imageTarget={p:p.id,b:b.id,c:i};$('#imageInput').click()}));e.append(choose)}
-        if(c.type==='text'){const t=make('div','textcontent',c.text);t.contentEditable='true';t.lang='sv';t.setAttribute('role','textbox');t.setAttribute('aria-label','Text i ruta');t.setAttribute('aria-multiline','true');styleText(t,c);t.onfocus=()=>select(p,b,i);t.oninput=()=>{c.text=t.innerText;changed();checkOverflow()};t.onpaste=plainPaste;e.append(t)}
+        if(c.type==='text'){const t=make('div','textcontent');renderRichText(t,c);t.contentEditable='true';t.lang='sv';t.setAttribute('role','textbox');t.setAttribute('aria-label','Text i ruta');t.setAttribute('aria-multiline','true');styleText(t,c);t.onfocus=()=>select(p,b,i);t.oninput=()=>{saveRichText(t,c);rememberTextSelection()};t.onpaste=plainPaste;t.onmouseup=rememberTextSelection;t.onkeyup=rememberTextSelection;e.append(t);e.addEventListener('click',ev=>{if(ev.target===e){t.focus();rememberTextSelection()}})}
         if(c.type==='image'){const img=make('img');img.src=c.src;img.alt='Dokumentbild';img.draggable=false;styleImage(img,c);e.append(img)}block.append(e);
       });
       addHandles(block,p,b);content.append(block);applyGrid(block,b);
@@ -67,14 +164,26 @@ function properties(){
   number('Mellanrum vågrätt (mm)',Number(b.gapX.toFixed(1)),0,M.gapLimit(b,'x'),.1,v=>{b.gapX=v;changed();render()});
   number('Mellanrum lodrätt (mm)',Number(b.gapY.toFixed(1)),0,M.gapLimit(b,'y'),.1,v=>{b.gapY=v;changed();render()});root.append(make('p','hint','Dra i gränserna eller nederkanten. Höjd kan anges ned till 0,1 mm. Mellanrum minskas om de inte får plats.'));
   const order=make('div','row');const move=dir=>{const i=p.blocks.indexOf(b),j=i+dir;if(j<0||j>=p.blocks.length)return;[p.blocks[i],p.blocks[j]]=[p.blocks[j],p.blocks[i]];changed();render()};const up=btn('↑ Flytta',()=>move(-1)),down=btn('↓ Flytta',()=>move(1));up.disabled=p.blocks[0]===b;down.disabled=p.blocks.at(-1)===b;order.append(up,down);root.append(order);
+  root.append(make('h3','','Innermarginaler'));
+  const margins=make('div','margin-grid');
+  for(const [key,label] of [['top','Uppe'],['right','Höger'],['bottom','Nere'],['left','Vänster']]){
+    const input=number(label+' (mm)',c.padding[key],0,100,.1,v=>{c.padding[key]=v;updateCell()});
+    margins.append(input.parentElement);
+  }
+  root.append(margins);
   if(c.type==='text'){
-    root.append(make('h3','','Text'));
-    selectControl('Textstil',c.textStyle,Object.entries(M.styles).map(([k,v])=>[k,v.label]),v=>{c.textStyle=v;Object.assign(c,{size:M.styles[v].size,bold:M.styles[v].bold});updateCell();properties()});
-    number('Textstorlek (pt)',c.size,8,64,1,v=>{c.size=v;updateCell()});
-    const bold=btn('Fetstil',()=>{c.bold=!c.bold;updateCell();properties()},c.bold?'primary wide':'wide');bold.setAttribute('aria-pressed',String(c.bold));root.append(bold);
+    root.append(make('h3','','Markerad text'),make('p','hint','Markera text i rutan och välj stil, storlek, fetstil eller färg. I en tom ruta väljer du format för den första texten.'));
+    const f=currentTextFormat(c);
+    selectControl('Textstil','',[['','Välj stil…'],...Object.entries(M.styles).map(([k,v])=>[k,v.label])],v=>{if(v)formatSelection({size:M.styles[v].size,bold:M.styles[v].bold})});
+    number('Textstorlek (pt)',f.size,8,64,1,v=>formatSelection({size:v})).dataset.format='size';
+    const bold=btn('Fetstil',()=>{const value=!currentTextFormat(c).bold;formatSelection({bold:value});bold.setAttribute('aria-pressed',String(value));bold.classList.toggle('primary',value)},f.bold?'primary wide':'wide');
+    bold.dataset.format='bold';bold.onpointerdown=ev=>{ev.preventDefault();rememberTextSelection()};bold.setAttribute('aria-pressed',String(f.bold));root.append(bold);
+    const color=make('input');color.type='color';color.dataset.format='color';color.value=f.color;color.oninput=()=>formatSelection({color:color.value});control('Textfärg',color);
+    number('Radavstånd för markerad text',f.lineHeight,1,2,.05,v=>formatSelection({lineHeight:v})).dataset.format='lineHeight';
+    root.append(make('h3','','Placering i rutan'));
     selectControl('Textjustering',c.align,[['left','Vänster'],['center','Centrerad'],['right','Höger'],['justify','Marginaljusterad']],v=>{c.align=v;updateCell()});
-    number('Radavstånd',c.lineHeight,1,2,.05,v=>{c.lineHeight=v;updateCell()});
-    const hy=make('input');hy.type='checkbox';hy.checked=c.hyphens;hy.onchange=()=>{c.hyphens=hy.checked;updateCell()};const label=make('label','check');label.append(hy,document.createTextNode('Avstava automatiskt'));root.append(label,make('p','hint','Svensk avstavning använder webbläsarens språkstöd. Inställningarna gäller hela textrutan.'));
+    selectControl('Höjdjustering',c.verticalAlign,[['top','Uppe'],['middle','Mitten'],['bottom','Nere']],v=>{c.verticalAlign=v;updateCell()});
+    const hy=make('input');hy.type='checkbox';hy.checked=c.hyphens;hy.onchange=()=>{c.hyphens=hy.checked;updateCell()};const label=make('label','check');label.append(hy,document.createTextNode('Avstava automatiskt'));root.append(label,make('p','hint','Justering och avstavning gäller hela rutan. Svensk avstavning använder webbläsarens språkstöd.'));
   }
   if(c.type==='image'){
     root.append(make('h3','','Bild'),btn('Byt bild',()=>{imageTarget={...selected};$('#imageInput').click()},'wide'));

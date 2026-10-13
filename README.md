@@ -19,7 +19,7 @@ Ladda ner repot och öppna index.html. Behåll style.css och app.js i samma mapp
 
 
 ## Utökad editor
-- Textstilar: brödtext, titel och undertitel. Fetstil, storlek, radavstånd samt vänster-, höger-, center- och marginaljustering gäller hela textrutan.
+- Textstilar: brödtext, titel och undertitel. Fetstil, storlek, färg och radavstånd gäller markerad text. Vänster-, höger-, center- och marginaljustering gäller hela textrutan.
 - Automatisk svensk avstavning kan slås på per ruta. Språkstödet varierar mellan webbläsare och operativsystem.
 - Nio layouter, inklusive tre kolumner, tre rader, 3 × 2 samt tre små rutor bredvid en stor (båda riktningarna).
 - Dra de blå gränserna mellan rutorna för att fördela bredd och höjd. Dra greppet under blocket för totalhöjd. Tangentbord: fokusera gränsen med Tab och använd piltangenterna; Shift ger större steg.
@@ -35,7 +35,14 @@ Kör `node --test model.test.cjs` för migration, sidgränser, rutproportioner o
 - Varje block har separata vågräta och lodräta mellanrum (0–20 mm). Avståndet mellan block styrs gemensamt.
 - Blockhöjd ned till 0,1 mm; rutproportionerna kan dras under den tidigare gränsen på 8 %. Vid mycket liten totalhöjd minskas mellanrummet automatiskt så att rutorna får plats. Innehåll som inte ryms markeras. PDF-export kan ändå fortsätta efter en varning; kontrollera utskriftsförhandsgranskningen så att ingen text klipps.
 - Totalt 15 layouter. Sex nya: fyra kolumner, stor ruta överst, stor ruta nederst, sidokolumn vänster, sidokolumn höger och stor mittruta.
-- Nya projektfiler använder version 3. Version 1 och 2 kan fortfarande öppnas.
+- Nya projektfiler använder version 4. Version 1, 2 och 3 kan fortfarande öppnas.
 
 ## Utskriftskontroll
 Tomma textrutor och deras redigeringsplatshållare räknas inte som textöverspill. Små avrundningsskillnader på upp till tre CSS-pixlar tolereras. Vid större överspill visas en varning med val att fortsätta till utskriftsdialogen eller återgå till editorn. Texten skalas inte om automatiskt. Kör `node --test print.test.cjs` för utskriftsregressionerna.
+
+## Textmarkering och innermarginaler (version 4)
+- Markera text i en ruta och välj brödtext, titel, undertitel, storlek, fetstil, färg eller radavstånd i egenskaperna. Format kan blandas i samma ruta. I en tom ruta väljer kontrollerna startformat.
+- Fyra separata innermarginaler i millimeter per ruta: uppe, höger, nere och vänster.
+- Höjdjustering placerar texten uppe, i mitten eller nere inom innermarginalerna. Vågrät justering och avstavning gäller hela rutan.
+- Projektfiler sparar text som validerade textsegment med formatering, aldrig som HTML. Äldre textrutor behåller 3 mm marginal; äldre bilder behåller sin kantplacering.
+- GitHub Actions kör modell- och utskriftstester samt ett Chromium-test av markerad text, sparning/öppning, marginaler och utskrift. Lokalt: installera Playwright och Chromium och kör `node --test browser.test.cjs`.
