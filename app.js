@@ -156,7 +156,7 @@ function addHandles(el,p,b){
 }
 function properties(){
   const root=$('#properties');root.replaceChildren();const {p,b,c}=selection();$('#selectionTitle').textContent=b?M.layouts[b.type].label:'Din arbetsyta';if(!b){root.append(make('p','muted','Välj en ruta för text- och bildinställningar. Dra i de blå rutgränserna för att ändra storlek.'));return}
-  function control(label,el){const l=make('label','',label);l.append(el);root.append(l);return el}
+  function control(label,el){el.setAttribute('aria-label',label);const l=make('label','',label);l.append(el);root.append(l);return el}
   function number(label,value,min,max,step,change){const e=make('input');e.type='number';Object.assign(e,{value,min,max,step});e.onchange=()=>{const v=M.clamp(Number.isFinite(e.valueAsNumber)?e.valueAsNumber:min,min,max);e.value=v;change(v)};return control(label,e)}
   function selectControl(label,value,options,change){const e=make('select');options.forEach(([v,t])=>{const o=make('option','',t);o.value=v;e.append(o)});e.value=value;e.onchange=()=>change(e.value);return control(label,e)}
   function range(label,value,min,max,step,change){const e=make('input');e.type='range';e.setAttribute('aria-label',label);Object.assign(e,{value,min,max,step});const out=make('output','',String(value));const l=make('label','range-label');l.append(make('span','',label),out,e);e.oninput=()=>{out.textContent=e.value;change(Number(e.value))};root.append(l)}
