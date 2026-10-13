@@ -5,7 +5,15 @@ let active=doc.pages[0].id,selected=null,dirty=false,imageTarget=null,logoTarget
 function make(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
 function btn(text,fn,cls){const e=make('button',cls,text);e.type='button';e.onclick=e=>{e.stopPropagation();fn(e)};return e}
 function notify(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>$('#toast').style.display='none',5500)}
-function changed(){dirty=true}
+let nameReminderDismissed=false,saveReminderDismissed=false;
+function syncProjectReminders(){
+ const unnamed=!doc.title.trim()||doc.title.trim().toLocaleLowerCase('sv')==='mitt dokument';
+ $('#nameReminder').hidden=!unnamed||nameReminderDismissed;
+ $('#saveReminder').hidden=!dirty||saveReminderDismissed;
+}
+$('#dismissNameReminder').onclick=()=>{nameReminderDismissed=true;syncProjectReminders();$('#title').focus()};
+$('#dismissSaveReminder').onclick=()=>{saveReminderDismissed=true;syncProjectReminders();$('#save').focus()};
+function changed(){dirty=true;syncProjectReminders()}
 function selection(){const p=doc.pages.find(p=>p.id===selected?.p),b=p?.blocks.find(b=>b.id===selected.b);return {p,b,c:b?.cells[selected.c]}}
 function syncActive(){document.querySelectorAll('.pagewrap').forEach(w=>w.querySelector('.paper').classList.toggle('active',w.id===active));document.querySelectorAll('#pageNav button').forEach((e,i)=>e.classList.toggle('active',doc.pages[i].id===active))}
 function select(p,b,i){const same=selected?.p===p.id&&selected?.b===b.id&&selected?.c===i;if(!same)textSelection=null;active=p.id;selected={p:p.id,b:b.id,c:i};syncActive();document.querySelectorAll('.cell').forEach(e=>e.classList.toggle('selected',e.dataset.block===b.id&&Number(e.dataset.cell)===i));if(!same)properties()}
@@ -237,8 +245,8 @@ async function readLocalImage(file){if(!['image/png','image/jpeg','image/webp'].
 $('#logoInput').onchange=async e=>{const file=e.target.files[0],target=logoTarget;e.target.value='';if(!file||!target)return;try{const src=await readLocalImage(file);doc[target].logo=src;changed();render()}catch(error){notify(error.message||'Bilden kunde inte öppnas.')}};
 $('#title').oninput=e=>{doc.title=e.target.value;document.title=doc.title||'PDF Maker';changed()};$('#numbers').onchange=e=>{doc.numbers=e.target.checked;changed();render()};$('#addPage').onclick=addPage;$('#bottomAdd').onclick=addPage;
 $('#imageInput').onchange=async e=>{const file=e.target.files[0],target=imageTarget;e.target.value='';if(!file||!target)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>20*1024*1024){notify('Välj en PNG-, JPEG- eller WebP-bild, högst 20 MB.');return}try{const bitmap=await createImageBitmap(file);const ratio=Math.min(1,2400/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*ratio);canvas.height=Math.round(bitmap.height*ratio);canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();const c=doc.pages.find(p=>p.id===target.p)?.blocks.find(b=>b.id===target.b)?.cells[target.c];if(!c)return;Object.assign(c,{type:'image',src:canvas.toDataURL('image/png'),zoom:1,posX:50,posY:50});selected=target;active=target.p;changed();render()}catch{notify('Bilden kunde inte öppnas. Prova en annan fil.')}};
-$('#save').onclick=()=>{const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=make('a');a.href=url;a.download=(doc.title||'dokument').replace(/[<>:"/\\|?*]/g,'_')+'.pdfmaker.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);dirty=false;notify('Projektfilen har laddats ner.')};$('#load').onclick=()=>$('#projectInput').click();
-$('#projectInput').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(dirty&&!confirm('Öppna projektet och ersätta ditt osparade arbete?'))return;try{if(f.size>100*1024*1024)throw Error();doc=M.validate(JSON.parse(await f.text()));active=doc.pages[0].id;selected=null;$('#title').value=doc.title;$('#numbers').checked=doc.numbers;document.title=doc.title||'PDF Maker';dirty=false;render();notify('Projektet är öppnat.')}catch{notify('Filen är inte ett giltigt PDF Maker-projekt.')}};
+$('#save').onclick=()=>{const blob=new Blob([JSON.stringify(doc)],{type:'application/json'}),url=URL.createObjectURL(blob),a=make('a');a.href=url;a.download=(doc.title||'dokument').replace(/[<>:"/\\|?*]/g,'_')+'.pdfmaker.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);dirty=false;saveReminderDismissed=false;syncProjectReminders();notify('Projektfilen har laddats ner.')};$('#load').onclick=()=>$('#projectInput').click();
+$('#projectInput').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;if(dirty&&!confirm('Öppna projektet och ersätta ditt osparade arbete?'))return;try{if(f.size>100*1024*1024)throw Error();doc=M.validate(JSON.parse(await f.text()));active=doc.pages[0].id;selected=null;$('#title').value=doc.title;$('#numbers').checked=doc.numbers;document.title=doc.title||'PDF Maker';dirty=false;nameReminderDismissed=false;saveReminderDismissed=false;syncProjectReminders();render();notify('Projektet är öppnat.')}catch{notify('Filen är inte ett giltigt PDF Maker-projekt.')}};
 $('#export').onclick=()=>{
   document.activeElement?.blur();
   if(checkOverflow() && !window.confirm(
@@ -247,5 +255,5 @@ $('#export').onclick=()=>{
   document.title=doc.title||'Mitt dokument';
   window.print();
 };window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
-render();
+render();syncProjectReminders();
 if(document.modelContext?.registerTool){const lifecycle=new AbortController();for(const tool of [{name:'read_document_structure',description:'Read page and layout counts in the current PDF document.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>({pages:doc.pages.map((p,i)=>({page:i+1,layouts:p.blocks.map(b=>b.type)}))})},{name:'add_document_page',description:'Append a blank A4 page to the current document.',inputSchema:{type:'object',properties:{},additionalProperties:false},execute:input=>{if(!input||typeof input!=='object'||Object.keys(input).length)throw Error('Expected empty object');const id=addPage();if(!id)throw Error('Page limit reached');return {pages:doc.pages.length}}}]){try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{})}catch{}}window.addEventListener('pagehide',()=>lifecycle.abort())}

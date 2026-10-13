@@ -18,3 +18,22 @@
 .textcontent div,.textcontent p{font-size:inherit;line-height:inherit;margin:0}
 .margin-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
 #properties input[type=color]{display:block;width:100%;height:38px;padding:3px;border:1px solid #d9dee9;border-radius:6px;background:white}
+
+/* Small, dismissible reminders anchored to the relevant header control. */
+.title-anchor,.save-anchor{position:relative;min-width:0}
+.project-reminder{position:absolute;top:calc(100% + 13px);left:0;width:250px;max-width:calc(100vw - 32px);z-index:12;padding:15px 32px 14px 16px;border:1px solid #cbd6fc;border-radius:12px;background:#f6f8ff;box-shadow:0 8px 24px #203c741a;color:#374157;text-align:left;white-space:normal}
+.project-reminder:before{content:'';position:absolute;top:-7px;left:24px;width:12px;height:12px;background:#f6f8ff;border-top:1px solid #cbd6fc;border-left:1px solid #cbd6fc;transform:rotate(45deg)}
+.project-reminder strong{font-size:14px;color:#2545ad;display:block}
+.project-reminder p{font-size:13px;line-height:1.5;margin:6px 0 0}
+.project-reminder .reminder-close{position:absolute;right:5px;top:5px;padding:2px 7px;border:0;background:transparent;font-size:20px;line-height:1;color:#69758f}
+.save-anchor>.project-reminder{left:auto;right:0;width:290px}
+.save-anchor>.project-reminder:before{left:auto;right:36px}
+@media(max-width:700px){
+ .title-anchor{flex:1}
+ .actions>.save-anchor{flex:1}
+ .save-anchor>#save{width:100%;height:100%}
+ .project-reminder{position:relative;top:auto;left:auto;margin-top:12px;width:100%;max-width:none}
+ .save-anchor>.project-reminder{position:absolute;width:min(280px,calc(100vw - 32px));right:calc(-100% - 8px);top:calc(100% + 1px)}
+ .save-anchor>.project-reminder:before{right:50%}
+}
+@media print{.project-reminder{display:none!important}}
