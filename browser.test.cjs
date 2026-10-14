@@ -67,6 +67,31 @@ test('selection formatting, cell geometry, project reopening and printing',async
   page.on('dialog',dialog=>dialog.accept());
   await page.getByRole('button',{name:'Exportera PDF',exact:true}).click();
   assert.equal(await page.evaluate(()=>window.didPrint),true);
+  // Invalid project imports must not replace the document or load remote images.
+  const invalid=structuredClone(saved);invalid.pages[0].blocks[0].cells[0].src='https://example.com/tracker.png';
+  await page.locator('#projectInput').setInputFiles({name:'invalid.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(invalid))});
+  await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('inte ett giltigt'));
+  assert.equal(await text.textContent(),'Alpha Beta Gamma');
+  const safe=structuredClone(saved);const literal='<img src=x onerror="window.injected=true">';
+  safe.pages[0].blocks[0].cells[0].runs=[];safe.pages[0].blocks[0].cells[0].text=literal;
+  await page.locator('#projectInput').setInputFiles({name:'literal.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(safe))});
+  await page.waitForFunction(value=>document.querySelector('.textcontent').textContent===value,literal);
+  assert.equal(await text.locator('img').count(),0);
+  assert.equal(await page.evaluate(()=>window.injected),undefined);
+  const policy=await page.evaluate(async()=>{
+   const blocked=[];document.addEventListener('securitypolicyviolation',e=>blocked.push(e.effectiveDirective));
+   const script=document.createElement('script');script.textContent='window.inlineInjected=true';document.head.append(script);
+   let denied=false;try{await fetch('/model.js')}catch{denied=true}
+   await new Promise(resolve=>setTimeout(resolve,100));
+   return {denied,inlineInjected:window.inlineInjected===true,blocked};
+  });
+  assert.equal(policy.denied,true);assert.equal(policy.inlineInjected,false);
+  assert(policy.blocked.includes('connect-src'));assert(policy.blocked.includes('script-src-elem'));
+  const cancelled=await text.evaluate(el=>{
+   const dt=new DataTransfer();dt.setData('text/html','<img src=x onerror="window.dropped=true">');dt.setData('text/plain','untrusted');
+   const ev=new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt});el.dispatchEvent(ev);return ev.defaultPrevented;
+  });
+  assert.equal(cancelled,true);assert.equal(await text.locator('img').count(),0);
   assert.deepEqual(errors,[]);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve))}
 });
